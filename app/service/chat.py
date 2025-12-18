@@ -35,6 +35,7 @@ class ChatService:
         messages = messages_store.get_messages_for_llm(request.conversation_id)
         
         full_response = ""
+        all_citations = []
         
         for token, metadata in self.agent.stream(messages, stream_mode="messages"):
             node = metadata.get('langgraph_node', '')
@@ -53,17 +54,52 @@ class ChatService:
                     }
                     yield f"data: {json.dumps(event)}\n\n"
             
-            # Check for text content in content_blocks
+            # Check for content_blocks (Google Gemini structure)
             elif hasattr(token, 'content_blocks') and token.content_blocks:
                 for block in token.content_blocks:
-                    if isinstance(block, dict) and block.get("type") == "text":
+                    if not isinstance(block, dict):
+                        continue
+                    
+                    block_type = block.get("type", "")
+                    
+                    # Handle reasoning/thinking blocks
+                    if block_type == "reasoning":
+                        reasoning_text = block.get("reasoning", "")
+                        if reasoning_text:
+                            event = {
+                                "type": "reasoning",
+                                "node": node,
+                                "data": reasoning_text
+                            }
+                            yield f"data: {json.dumps(event)}\n\n"
+                    
+                    # Handle text blocks with optional annotations/citations
+                    elif block_type == "text":
                         text = block.get("text", "")
-                        full_response += text
+                        if text:
+                            full_response += text
+                        
+                        # Extract citations from annotations
+                        annotations = block.get("annotations", [])
+                        citations = []
+                        for ann in annotations:
+                            if ann.get("type") == "citation":
+                                citations.append({
+                                    "id": ann.get("id", ""),
+                                    "url": ann.get("url", ""),
+                                    "title": ann.get("title", ""),
+                                    "cited_text": ann.get("cited_text", "")
+                                })
+                                all_citations.append(citations[-1])
+                        
                         event = {
                             "type": "text",
                             "node": node,
-                            "data": text
+                            "data": text,
                         }
+                        if citations:
+                            event["citations"] = citations
+                        
                         yield f"data: {json.dumps(event)}\n\n"
             
             # Fallback: check for plain content attribute
@@ -80,8 +116,14 @@ class ChatService:
         # Store the complete assistant response
         if full_response:
             messages_store.add_message(request.conversation_id, "assistant", full_response)
-
         
-    
+        # Send final event with all citations
+        if all_citations:
+            event = {
+                "type": "citations",
+                "data": all_citations
+            }
+            yield f"data: {json.dumps(event)}\n\n"
         
-        
+        # Send done event
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
