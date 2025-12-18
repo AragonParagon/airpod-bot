@@ -24,6 +24,18 @@ class AirpodAgent:
         return ChatGoogleGenerativeAI(
             model=self.model,
             api_key=settings.LLM_PROVIDER_API_KEY,
+            include_thoughts=True,
+            tools=[{"google_search": {}}],
+            thinking_level="medium"
+        )
+
+    def get_openai_model(self):
+        """
+        Retruns an instantiated chat model
+        """
+        return ChatOpenAI(
+            model=self.model,
+            api_key=settings.LLM_PROVIDER_API_KEY,
         )
 
     def get_agent(self):
@@ -33,7 +45,7 @@ class AirpodAgent:
         return create_agent(
             model=self.get_model(),
             system_prompt=self.system_prompt,
-            tools=[tavily_web_search_tool],
+            tools = [{"google_search": {}}],
             middleware = [
 
                 # Limits the model to 2 tool calls per user query
