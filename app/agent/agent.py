@@ -21,11 +21,6 @@ class AirpodAgent:
         """
         Retruns an instantiated chat model
         """
-        # return ChatOpenAI(
-        #     model=self.model,
-        #     api_key=settings.LLM_PROVIDER_API_KEY,
-        # )
-
         return ChatGoogleGenerativeAI(
             model=self.model,
             api_key=settings.LLM_PROVIDER_API_KEY,
@@ -33,17 +28,19 @@ class AirpodAgent:
 
     def get_agent(self):
         """
-        Returns the agent
+        Returns the agent object that will be invoked to generate responses
         """
         return create_agent(
             model=self.get_model(),
             system_prompt=self.system_prompt,
             tools=[tavily_web_search_tool],
             middleware = [
+
+                # Limits the model to 2 tool calls per user query
                 ToolCallLimitMiddleware(
                     tool_name="tavily_web_search_tool",
                     thread_limit=10,
-                    run_limit=2
+                    run_limit=10
                 )
             ]
         )

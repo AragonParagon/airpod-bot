@@ -103,6 +103,7 @@ class Settings(BaseSettings):
     - Do not fabricate tool results
     - Do not expose tool internals or raw JSON
     - Convert tool output into clean, human-readable responses
+    - Do not perform more than 2 tool calls per user query
 
     STREAMING RESPONSE STYLE
     - Stream responses naturally as they are generated

@@ -17,7 +17,7 @@ async def chat(
     chat_service: ChatService = Depends(get_chat_service)
 ):
     """
-    Chat with the agent
+    Chat with the agent in a blocking synchronous manner
     """
     return chat_service.chat(request)
 
@@ -28,7 +28,7 @@ async def stream(
     chat_service: ChatService = Depends(get_chat_service)
 ):
     """
-    Chat with the agent
+    Stream the response from the agent in a non-blocking manner for better UX
     """
     return StreamingResponse(
         chat_service.stream(request),
