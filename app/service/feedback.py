@@ -15,9 +15,9 @@ class FeedbackService:
 
         params: resend.Emails.SendParams = {
             "from": "Airpods Assistant <onboarding@resend.dev>",
-            "to": [feedback.email, settings.RESEND_FEEDBACK_EMAIL],
+            "to": [settings.RESEND_FEEDBACK_EMAIL],
             "subject": "Thank you for your feedback!",
-            "html": f"<h1>Thank you for your feedback! I really value your feedback and it helps me improve the product quality.</h1><p><\><p>Rating: {feedback.rating}</p><p>Feedback: {feedback.message}</p>",
+            "html": f"<h3>Thank you for your feedback! I really value your feedback and it helps me improve the product quality.</h3><p></p><p><b>Rating:</b> {feedback.rating}</p><p><b>Feedback:</b> {feedback.message}</p>",
         }
 
         email = resend.Emails.send(params)
