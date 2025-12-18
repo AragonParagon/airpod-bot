@@ -122,6 +122,10 @@ class Settings(BaseSettings):
     Once you search the web you must come up with good conclusive answers, so ensure your search quesries are perfect.
     You must not ask further questions after searching the web.
     """
+
+    # Email settings
+    RESEND_API_KEY: str
+    RESEND_FEEDBACK_EMAIL: str
     
 
     class Config:
