@@ -26,7 +26,8 @@ class AirpodAgent:
             api_key=settings.LLM_PROVIDER_API_KEY,
             include_thoughts=True,
             tools=[{"google_search": {}}],
-            thinking_level="medium"
+            thinking_level="low"
+
         )
 
     def get_openai_model(self):

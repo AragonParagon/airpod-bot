@@ -36,9 +36,14 @@ class ChatService:
         
         full_response = ""
         all_citations = []
+
+        
         
         for token, metadata in self.agent.stream(messages, stream_mode="messages"):
             node = metadata.get('langgraph_node', '')
+
+            print("Token: ", token)
+            print("\n")
             
             # Check if the token has tool calls
             if hasattr(token, 'tool_calls') and token.tool_calls:
@@ -82,15 +87,41 @@ class ChatService:
                         # Extract citations from annotations
                         annotations = block.get("annotations", [])
                         citations = []
-                        for ann in annotations:
-                            if ann.get("type") == "citation":
-                                citations.append({
-                                    "id": ann.get("id", ""),
-                                    "url": ann.get("url", ""),
-                                    "title": ann.get("title", ""),
-                                    "cited_text": ann.get("cited_text", "")
-                                })
-                                all_citations.append(citations[-1])
+                        formatted_text = full_response
+                        
+                        # Sort by end_index in reverse to avoid position shifts
+                        sorted_annotations = sorted(
+                            [a for a in annotations if a.get("type") == "citation"],
+                            key=lambda x: x.get("end_index", 0),
+                            reverse=True
+                        )
+                        
+                        # Track citation number (in reverse since we process from end to start)
+                        citation_num = len(sorted_annotations)
+                        
+                        for ann in sorted_annotations:
+                            url = ann.get("url", "")
+                            citations.append({
+                                "id": ann.get("id", ""),
+                                "url": url,
+                                "title": ann.get("title", ""),
+                                "end_index": ann.get("end_index", 0),
+                                "cited_text": ann.get("cited_text", ""),
+                                "citation_number": citation_num
+                            })
+                            all_citations.append(citations[-1])
+                            
+                            end_idx = ann.get("end_index", 0)
+                            if isinstance(end_idx, int) and end_idx > 0:
+                                # Insert numbered hyperlink like [1](url)
+                                hyperlink = f" [[{citation_num}]]({url})"
+                                formatted_text = formatted_text[:end_idx] + hyperlink + formatted_text[end_idx:]
+                            
+                            citation_num -= 1
+                        
+                        print("full_response:", full_response)
+                        print("formatted_text:", formatted_text)
+
                         
                         event = {
                             "type": "text",
