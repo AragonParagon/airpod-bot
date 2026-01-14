@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     # Firecrawl settings
     FIRECRAWL_API_KEY: str
+    FIRECRAWL_API_UR: str = "https://api.firecrawl.dev/v2/scrape"
 
     # Web Search Settings
     WEB_SEARCH_ENABLED: bool = True
