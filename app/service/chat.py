@@ -191,7 +191,7 @@ class ChatService:
         all_results = []
         image_links = []
 
-        # Scrape images from each source
+        # Scrape images from each source [Can be optimised via batch or async background processing]
         for source in sources:
             source_url = source.get("url")
             if not source_url:
