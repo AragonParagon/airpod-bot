@@ -1,12 +1,8 @@
 import json
-from typing import List
-from firecrawl import Firecrawl
-import requests
-
 from app.agent.agent import AirpodAgent
 from app.models.chat import ChatRequest, ChatResponse
 from app.utils.store import messages_store
-from app.core.settings import settings
+
 
 class ChatService:
     def __init__(self):
@@ -159,88 +155,6 @@ class ChatService:
                 "data": all_citations
             }
             yield f"data: {json.dumps(event)}\n\n"
-
-            image_links = self.scrape_images(all_citations)
-
-            # Send images event
-            if image_links:
-                event = {
-                    "type": "images",
-                    "data": image_links
-                }
-                yield f"data: {json.dumps(event)}\n\n"
-
+        
         # Send done event
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
-
-    def scrape_images(self, sources) -> List[str]:
-        """
-        Scrapes images from the given sources using firecrawl
-        """
-
-        if not sources:
-            return []
-
-        url = "https://api.firecrawl.dev/v2/scrape"
-        headers = {
-            "Authorization": "Bearer fc-f03a156013d74a61875b3d8702669a26",
-            "Content-Type": "application/json"
-        }
-
-        all_results = []
-
-        image_links = []
-
-        for source in sources:
-            source_url = source.get("url")
-            if not source_url:
-                continue
-
-            payload = {
-                "url": source_url,
-                "onlyMainContent": False,
-                "maxAge": 172800000,
-                "parsers": ["pdf"],
-                "formats": [
-                    {
-                        "type": "json",
-                        "schema": {
-                            "type": "object",
-                            "required": [],
-                            "properties": {
-                                "company_name": {
-                                    "type": "string"
-                                },
-                                "company_description": {
-                                    "type": "string"
-                                },
-                                "imageUrl": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "object",
-                                        "required": [],
-                                        "properties": {}
-                                    }
-                                }
-                            }
-                        },
-                        "prompt": "Extract any images present on the page."
-                    }
-                ]
-            }
-
-            response = requests.post(url, json=payload, headers=headers)
-            result = response.json()
-            all_results.append(result)
-
-            # Extract ogImage from data -> metadata -> ogImage
-            og_image = result.get("data", {}).get("metadata", {}).get("ogImage")
-            if og_image:
-                image_links.append(og_image)
-
-
-        print(f"\n\n\n ----- Scrape result for {source_url} --------")
-        print(image_links)
-        print("\n\n\n")
-
-        return image_links
