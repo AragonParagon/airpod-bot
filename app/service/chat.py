@@ -1,8 +1,12 @@
 import json
+from typing import List
+from firecrawl import Firecrawl
+import requests
+
 from app.agent.agent import AirpodAgent
 from app.models.chat import ChatRequest, ChatResponse
 from app.utils.store import messages_store
-
+from app.core.settings import settings
 
 class ChatService:
     def __init__(self):
@@ -42,9 +46,6 @@ class ChatService:
         for token, metadata in self.agent.stream(messages, stream_mode="messages"):
             node = metadata.get('langgraph_node', '')
 
-            print("Token: ", token)
-            print("\n")
-            
             # Check if the token has tool calls
             if hasattr(token, 'tool_calls') and token.tool_calls:
                 for tool_call in token.tool_calls:
@@ -155,6 +156,87 @@ class ChatService:
                 "data": all_citations
             }
             yield f"data: {json.dumps(event)}\n\n"
-        
+
+            # Scrape images from citations
+            image_links = self.scrape_images(all_citations)
+
+            # Send images event
+            if image_links:
+                event = {
+                    "type": "images",
+                    "data": image_links
+                }
+                yield f"data: {json.dumps(event)}\n\n"
+
         # Send done event
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    def scrape_images(self, sources) -> List[str]:
+        """
+        Scrapes images from the given sources using firecrawl
+
+        Returns:
+            List[str]: List of image links
+        """
+
+        if not sources:
+            return []
+
+        url = settings.FIRECRAWL_API_URL
+        headers = {
+            "Authorization": f"Bearer {settings.FIRECRAWL_API_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        all_results = []
+        image_links = []
+
+        # Scrape images from each source [Can be optimised via batch or async background processing]
+        for source in sources:
+            source_url = source.get("url")
+            if not source_url:
+                continue
+
+            payload = {
+                "url": source_url,
+                "onlyMainContent": False,
+                "maxAge": 172800000,
+                "parsers": ["pdf"],
+                "formats": [
+                    {
+                        "type": "json",
+                        "schema": {
+                            "type": "object",
+                            "required": [],
+                            "properties": {
+                                "company_name": {
+                                    "type": "string"
+                                },
+                                "company_description": {
+                                    "type": "string"
+                                },
+                                "imageUrl": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "required": [],
+                                        "properties": {}
+                                    }
+                                }
+                            }
+                        },
+                        "prompt": "Extract any images present on the page."
+                    }
+                ]
+            }
+
+            response = requests.post(url, json=payload, headers=headers)
+            result = response.json()
+            all_results.append(result)
+
+            # Extract ogImage from data -> metadata -> ogImage
+            og_image = result.get("data", {}).get("metadata", {}).get("ogImage")
+            if og_image:
+                image_links.append(og_image)
+
+        return image_links
