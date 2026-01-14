@@ -1,8 +1,12 @@
 import json
+from typing import List
+from firecrawl import Firecrawl
+import requests
+
 from app.agent.agent import AirpodAgent
 from app.models.chat import ChatRequest, ChatResponse
 from app.utils.store import messages_store
-
+from app.core.settings import settings
 
 class ChatService:
     def __init__(self):
@@ -36,6 +40,8 @@ class ChatService:
         
         full_response = ""
         all_citations = []
+
+        
         
         for token, metadata in self.agent.stream(messages, stream_mode="messages"):
             node = metadata.get('langgraph_node', '')
@@ -82,15 +88,41 @@ class ChatService:
                         # Extract citations from annotations
                         annotations = block.get("annotations", [])
                         citations = []
-                        for ann in annotations:
-                            if ann.get("type") == "citation":
-                                citations.append({
-                                    "id": ann.get("id", ""),
-                                    "url": ann.get("url", ""),
-                                    "title": ann.get("title", ""),
-                                    "cited_text": ann.get("cited_text", "")
-                                })
-                                all_citations.append(citations[-1])
+                        formatted_text = full_response
+                        
+                        # Sort by end_index in reverse to avoid position shifts
+                        sorted_annotations = sorted(
+                            [a for a in annotations if a.get("type") == "citation"],
+                            key=lambda x: x.get("end_index", 0),
+                            reverse=True
+                        )
+                        
+                        # Track citation number (in reverse since we process from end to start)
+                        citation_num = len(sorted_annotations)
+                        
+                        for ann in sorted_annotations:
+                            url = ann.get("url", "")
+                            citations.append({
+                                "id": ann.get("id", ""),
+                                "url": url,
+                                "title": ann.get("title", ""),
+                                "end_index": ann.get("end_index", 0),
+                                "cited_text": ann.get("cited_text", ""),
+                                "citation_number": citation_num
+                            })
+                            all_citations.append(citations[-1])
+                            
+                            end_idx = ann.get("end_index", 0)
+                            if isinstance(end_idx, int) and end_idx > 0:
+                                # Insert numbered hyperlink like [1](url)
+                                hyperlink = f" [[{citation_num}]]({url})"
+                                formatted_text = formatted_text[:end_idx] + hyperlink + formatted_text[end_idx:]
+                            
+                            citation_num -= 1
+                        
+                        print("full_response:", full_response)
+                        print("formatted_text:", formatted_text)
+
                         
                         event = {
                             "type": "text",
@@ -124,6 +156,89 @@ class ChatService:
                 "data": all_citations
             }
             yield f"data: {json.dumps(event)}\n\n"
-        
+
+            # Once all sources ready, send for image scraping
+            image_links = self.scrape_images(all_citations)
+
+            # Send images event to FE
+            if image_links:
+                event = {
+                    "type": "images",
+                    "data": image_links
+                }
+                yield f"data: {json.dumps(event)}\n\n"
+
         # Send done event
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    def scrape_images(self, sources) -> List[str]:
+        """
+        Scrapes images from the given sources using firecrawl
+
+        Returns:
+            List[str]: List of image links
+        """
+
+        if not sources:
+            return []
+
+        url = settings.FIRECRAWL_API_BASE_URL
+        headers = {
+            "Authorization": "Bearer " + settings.FIRECRAWL_API_KEY,
+            "Content-Type": "application/json"
+        }
+
+
+        # Initialise helper lists
+        all_results = []
+        image_links = []
+
+        # Iterate over sources and scrape images [CAN BE OPTIMIZED]
+        for source in sources:
+            source_url = source.get("url")
+            if not source_url:
+                continue
+
+            payload = {
+                "url": source_url,
+                "onlyMainContent": False,
+                "maxAge": 172800000,
+                "parsers": ["pdf"],
+                "formats": [
+                    {
+                        "type": "json",
+                        "schema": {
+                            "type": "object",
+                            "required": [],
+                            "properties": {
+                                "company_name": {
+                                    "type": "string"
+                                },
+                                "company_description": {
+                                    "type": "string"
+                                },
+                                "imageUrl": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "required": [],
+                                        "properties": {}
+                                    }
+                                }
+                            }
+                        },
+                        "prompt": "Extract any images present on the page."
+                    }
+                ]
+            }
+
+            response = requests.post(url, json=payload, headers=headers)
+            result = response.json()
+            all_results.append(result)
+
+            # Extract ogImage from data -> metadata -> ogImage
+            og_image = result.get("data", {}).get("metadata", {}).get("ogImage")
+            if og_image:
+                image_links.append(og_image)
+
+        return image_links
