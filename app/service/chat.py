@@ -182,9 +182,9 @@ class ChatService:
         if not sources:
             return []
 
-        url = self.settings.FIRECRAWL_API_URL
+        url = settings.FIRECRAWL_API_URL
         headers = {
-            "Authorization": f"Bearer {self.settings.FIRECRAWL_API_KEY}",
+            "Authorization": f"Bearer {settings.FIRECRAWL_API_KEY}",
             "Content-Type": "application/json"
         }
 
