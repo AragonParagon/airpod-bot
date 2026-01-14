@@ -45,9 +45,6 @@ class ChatService:
         
         for token, metadata in self.agent.stream(messages, stream_mode="messages"):
             node = metadata.get('langgraph_node', '')
-
-            print("Token: ", token)
-            print("\n")
             
             # Check if the token has tool calls
             if hasattr(token, 'tool_calls') and token.tool_calls:
@@ -160,9 +157,10 @@ class ChatService:
             }
             yield f"data: {json.dumps(event)}\n\n"
 
+            # Once all sources ready, send for image scraping
             image_links = self.scrape_images(all_citations)
 
-            # Send images event
+            # Send images event to FE
             if image_links:
                 event = {
                     "type": "images",
@@ -176,21 +174,26 @@ class ChatService:
     def scrape_images(self, sources) -> List[str]:
         """
         Scrapes images from the given sources using firecrawl
+
+        Returns:
+            List[str]: List of image links
         """
 
         if not sources:
             return []
 
-        url = "https://api.firecrawl.dev/v2/scrape"
+        url = settings.FIRECRAWL_API_BASE_URL
         headers = {
-            "Authorization": "Bearer fc-f03a156013d74a61875b3d8702669a26",
+            "Authorization": "Bearer " + settings.FIRECRAWL_API_KEY,
             "Content-Type": "application/json"
         }
 
-        all_results = []
 
+        # Initialise helper lists
+        all_results = []
         image_links = []
 
+        # Iterate over sources and scrape images [CAN BE OPTIMIZED]
         for source in sources:
             source_url = source.get("url")
             if not source_url:
@@ -237,10 +240,5 @@ class ChatService:
             og_image = result.get("data", {}).get("metadata", {}).get("ogImage")
             if og_image:
                 image_links.append(og_image)
-
-
-        print(f"\n\n\n ----- Scrape result for {source_url} --------")
-        print(image_links)
-        print("\n\n\n")
 
         return image_links
