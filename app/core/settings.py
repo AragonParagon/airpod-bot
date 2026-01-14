@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     LLM_PROVIDER_API_KEY: str
     LLM_PROVIDER_MODEL: str
 
+    # Firecrawl settings
+    FIRECRAWL_API_KEY: str
+
     # Web Search Settings
     WEB_SEARCH_ENABLED: bool = True
     WEB_SEARCH_API_KEY: str 
@@ -134,6 +137,8 @@ class Settings(BaseSettings):
     # Email settings
     RESEND_API_KEY: str
     RESEND_FEEDBACK_EMAIL: str
+
+    
     
 
     class Config:
